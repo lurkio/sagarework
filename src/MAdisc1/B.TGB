@@ -1,0 +1,23 @@
+MODE7:VDU23;8202;0;0;0; 
+PRINTSPC11"THE GOLDEN BATON"
+PRINT'"***************************************":*FX15,0 
+PRINT"   Dark clouds drift ominously across    the rising moon, you cringe as the      night silence is suddenly shattered by  the fearsome howl of some fell creature deep within the forest."
+PRINT'"   Weary from travelling, unable to      force yourself onward, you sink to the  ground and lean back against the bole   of a huge, gnarled old tree. As your    aching limbs slowly relax, you silently";
+PRINT" curse the road that led you to this     evil place."
+PRINT'"   The noble cause that initially        motivated you to undertake this deadly  mission seems to pale into insignifi-   cance against the perils that you have, up until now, survived."
+PRINT'SPC6"PRESS ANY KEY TO CONTINUE";:A=GET:VDU28,0,22,39,4:CLS:*FX15
+PRINT"   Your mission is to recover the        legendary Golden Baton, a priceless     artifact that has been worshipped by    your race for countless generations."
+PRINT'"   The Baton was stolen from the palace  of King Ferrenuil, ruler of your        homeland. Many learned counsellors      strongly believe that the Golden Baton  holds within it a kind of life-force"
+PRINT" that maintains an equilibrium between   the forces of good and evil."
+PRINT'"   For many centuries, your homelands    have suffered no wars, no droughts or   famine."
+A=GET:CLS:*FX15
+PRINT"   King Ferrenuil fears for the future   of his people as the influence of the   Baton has been taken from his lands."'
+PRINT"   Ever since the Baton was stolen,      brave warriors and hardy knights were   sent far and wide through the world in  search of this artifact... none ever    returned."
+PRINT'"   So it was that you started out on     your journey, travelling through        strange, hostile lands until finally    you reached this territory of Evil      magic whose name is never spoken."
+PRINT" An almost tangible feeling of malice    pervades the atmosphere and weariness   descends upon the traveller like a      pall of death.";
+A=GET:CLS:*FX15
+PRINT"   You draw your robe around yourself    to ward off the icy chill of night and  sink into a troubled sleep, mortally    afraid of what the coming days may cast upon you....."
+A=GET:MODE7:VDU23;8202;0;0;0;
+*LOAD L.TGB
+*LOAD G.TGB
+*ENGINE

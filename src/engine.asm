@@ -36,10 +36,18 @@ currentc   =   &85
 redraw     =   &86
 actioned   =   &87
 redrawg    =   &88
+countacts  =   &89
+countactsh =   &8a
+yystore    =   &8b
+; Optional msgcolour
+msgcolour  =   &8c
+terminator =   &8d
+crneeded   =   &8e
+ystart     =   &8f
 
 workbuffer =   &500
 roombuffer =   &600
-linebuffer =   &620
+linebuffer =   &630
 
 ; Reserve save game areas
 org &c00
@@ -74,36 +82,46 @@ org &c00
 .objectlocs
 
 ; We may change this to be calculated
-actionsptr =   &900
-verbsptr   =   &902
-nounsptr   =   &904
-roomsptr   =   &906
-msgsptr    =   &908
-objectsptr =   &90a
-dictptr    =   &90c
+actionsptr =   &a00
+verbsptr   =   &a02
+nounsptr   =   &a04
+roomsptr   =   &a06
+msgsptr    =   &a08
+objectsptr =   &a0a
+dictptr    =   &a0c
 
-datastart  =   &1c00
-datastarth =   &1c
-nitems     =   &1c0e
-nactions   =   &1c0f
-nverbs     =   &1c10
-nnouns     =   &1c11
-nrooms     =   &1c12
-mcarry     =   &1c13
-startroom  =   &1c14
-wlen       =   &1c15
-llen       =   &1c16
-nmess      =   &1c17
-trroom     =   &1c18
+IF GRAPHICS  
+   datastart  = &1d00
+   codestart  = &0e00
+ELSE
+   datastart  = &2700
+   codestart  = &1900
+ENDIF
 
-org &e00
+nitems     =   datastart + &0e
+nactions   =   datastart + &0f
+nactionsh  =   datastart + &10
+nverbs     =   datastart + &11
+nnouns     =   datastart + &12
+nrooms     =   datastart + &13
+mcarry     =   datastart + &14
+startroom  =   datastart + &15
+wlen       =   datastart + &16
+llen       =   datastart + &17
+nmess      =   datastart + &18
+trroom     =   datastart + &19
+
+org codestart
 ; first things - copy the pointers to memory areas and update for offset
 ; assume we load at load
 .start
-.engineinit:   ldx #&d
+.engineinit:   lda #200
+               ldx #1
+               jsr osbyte
+               ldx #&d
 .ptrloop:      lda datastart,x
                clc
-               adc #datastarth
+               adc #>datastart
                sta actionsptr,x
                dex
                lda datastart,x
@@ -115,7 +133,7 @@ org &e00
                sta randomh
                ldx #vducodes MOD 256
                ldy #vducodes DIV 256
-               jsr printbuf
+               jsr prtvdu
                tsx
                stx stackptr
                ; first save stackpoint
@@ -154,6 +172,7 @@ org &e00
                ; y is index
                ldx #&ff
                ldy #0
+               sty crneeded
 .objloop       jsr skipstringbp
 .enddesc       lda (bufptr),y
                inx
@@ -196,8 +215,7 @@ org &e00
                bne showroom
                jmp quitgame
 .showroom      jsr displayroom
-.input
-               lda #&c
+.input         lda #&c
                jsr printsystemmsg
                jsr getinputline
                ldx #<linebuffer
@@ -217,12 +235,18 @@ org &e00
                sta (verbptr),y
 .verbmsg       ldx verbptr
                ldy verbptr+1
+               if GRAPHICS=0
+                  lda #131
+               else
+                  lda #0
+               endif
                jsr printbuf
                jsr osasci
                lda #9
                jsr printsystemmsg
                jsr osnewl
                jmp input
+print "verbok ",~verbok
 .verbok        lda noun
                cmp #&ff
                bne nounok
@@ -230,6 +254,7 @@ org &e00
                jsr printsystemmsg
                ldx nounptr
                ldy nounptr+1
+               lda #0
                jsr printbuf
                jmp input
 .nounok        jsr performaction
@@ -246,21 +271,57 @@ org &e00
 ; Generic procedures - to minimise code size
 ; Print prints the message at YYXX, terminated by 0 or 0x0d; A does not survive
 ; printbuf(x=low,y=high)
+print "Printbuf", ~printbuf
 .printbuf
 {
-               stx bufptr
-               sty bufptr+1
-               ldy #0
-.printloop     lda (bufptr),y
-               beq quit
-               pha
-               jsr osasci
-               pla
-               cmp #&0d
-               beq quit
-               iny
-               bne printloop
-.quit          rts
+            stx bufptr
+            sty bufptr+1
+            sta msgcolour
+.wrapline	lda msgcolour
+            beq nocolour
+            jsr osasci
+.nocolour	lda #134
+            jsr osbyte
+            stx ystart
+            ldy #0
+            sty locystore
+.yloop		lda (bufptr),Y
+            beq endline
+            cmp #&0d
+            beq endline
+            cmp #&20
+            bne nospace
+            sty locystore
+.nospace    iny
+            tya
+            clc
+            adc ystart
+            cmp #TEXTCOL
+            bcc yloop
+            jmp printit
+.endline    iny
+            sty locystore
+.printit    ldy #0
+.prloop     cpy locystore
+            beq newline
+            lda (bufptr),y
+            beq finish
+            jsr osasci
+            lda (bufptr),y
+            cmp #&0d
+            beq finish
+            iny
+            jmp prloop
+.newline	   lda #&0d
+            jsr osasci
+            lda (bufptr),y
+            cmp #&20
+            bne noinc
+            inc locystore
+.noinc      lda locystore
+            jsr addtobufptr
+            jmp wrapline
+.finish		rts
 }
 
 .prtvdu
@@ -278,6 +339,8 @@ org &e00
                
 .getinputline
 {
+               lda #INPUTCOL
+               jsr osasci
                lda #0
                ldx #oswordblock MOD 256
                ldy #oswordblock DIV 256
@@ -311,23 +374,31 @@ org &e00
                
 ; printsystemmsg(a=msg)
 ; to cut down repeat code
+print "System msg: ", ~printsystemmsg
 .printsystemmsg
 {
                jsr findsystemmsg
+               ldy #1
+               lda (foundptr),y
+               pha
+               lda #2
+               jsr addtofoundptr
                ldx foundptr
                ldy foundptr+1
-               inx
-               bne printit
-               iny
-.printit       jmp printbuf
+               pla
+               jmp printbuf
 }
 
 .printmessage
 {
                jsr findmessage
+               lda #0
                jsr copymessage
+               lda #1
+               sta crneeded
                ldx #workbuffer MOD 256
                ldy #workbuffer DIV 256
+               lda #MESSCOL
                jmp printbuf
 }
 
@@ -393,6 +464,7 @@ print "Parse: ",~parsecommand
                bne notoneword
                ldy #0
                lda (bufptr),y
+               and #&df
                ldx #0
 .onewordloop   cmp shortverbs,x
                beq foundoneword
@@ -425,6 +497,7 @@ print "Parse: ",~parsecommand
                sta verb
                ; locate the space
                ldy #&ff
+print "spaceloop ", ~spaceloop
 .spaceloop     iny
                lda (bufptr),y
                cmp #&0d             ; end of sentence - store 00 for word
@@ -522,6 +595,7 @@ print "Parse: ",~parsecommand
 print "findword ", ~findword     
 {
                sta astore
+               inc astore
                lda #&ff
                sta exitnum          ; for the unsynonym command
                ldx #0
@@ -532,7 +606,7 @@ print "findword ", ~findword
                stx exitnum
                ; char loop
 .charloop      lda (foundptr),y
-               and #&7f             ; remove synonym flag               
+               and #&7f             ; remove synonym flag 
                cmp (bufptr),y
                bne checkshort
                cmp #&20             ; Check whether it's a space
@@ -637,7 +711,8 @@ print "findword ", ~findword
 ; copymessage(&71&70 = message)
 ; decodes the message pointed to by &71&70 and stores it in workbuffer
 .copymessage:
-{              lda dictptr
+{              sta terminator
+               lda dictptr
                sta bufptr
                lda dictptr+1
                sta bufptr+1
@@ -653,9 +728,9 @@ print "findword ", ~findword
                sta workbuffer,x ; else, store in buffer
                inx
                jmp next         ; skip token printing
-.quit:         lda #&0d
+.quit:         lda terminator
                sta workbuffer,x
-               rts
+.reallyquit    rts
 .token:        sty ystore       ; save y as we're going to be using it
                clc              ; safety
                and #&7f         ; last 7 bits
@@ -699,18 +774,21 @@ print "displayroom ",~displayroom
                lda redrawg
                beq nogfx
                lda locastore
-               jsr drawscr
+               IF GRAPHICS
+                  jsr drawscr
+               ENDIF
                lda #0
                sta redrawg
 .nogfx         lda locastore
                jsr findroom
                ; Now print out the room description
-.showit        jsr copymessage
+.showit        lda #&0d
+               jsr copymessage
                lda foundptr+1
                sta roomptr+1
                lda foundptr
                sta roomptr       ; save foundptr for use with the exits
-               sty ystore
+               sty yystore
                ; check whether it starts with a *
                lda workbuffer
                cmp #'*'
@@ -726,32 +804,12 @@ print "displayroom ",~displayroom
                inx
                bne printit
                iny
-.printit       jsr printbuf
-               ; print exits
-               lda #6
-               jsr printsystemmsg
-               ldx #&ff
-               ldy ystore
-               lda (roomptr),y
-.exitloop      inx
-               cpx #5
-               beq finish
-               lsr a
-               bcc exitloop
-               stx xstore
-               sta ystore
-               txa
-               jsr printsystemmsg
-               lda ystore
-               ldx xstore
-               jmp exitloop
-.finish        jsr osnewl
-               ; Objects - first get a count
-               jsr osnewl
+.printit       lda #EXITCOL
+               jsr printbuf
                lda locastore
                jsr countobjectsin
                cmp #0
-               beq leave
+               beq printexits
                lda #7
                jsr printsystemmsg 
                jsr osnewl
@@ -762,25 +820,55 @@ print "displayroom ",~displayroom
 .nextobject    inx
                cpx nitems
                bne objectloop
-.leave         lda #0
+.printexits    jsr osnewl
+               jsr osnewl
+               lda #6
+               jsr printsystemmsg
+               ldx #&ff
+               ldy yystore
+               lda (roomptr),y
+.exitloop      inx
+               cpx #5
+               beq leave
+               lsr a
+               bcc exitloop
+               stx xstore
+               sta ystore
+               txa
+               jsr printsystemmsg
+               lda ystore
+               ldx xstore
+               jmp exitloop
+.leave         jsr osnewl
+               jsr osnewl
+               lda #0
                sta redraw
                sta redrawg
+               if GRAPHICS=0
+                  lda #32
+                  jsr printsystemmsg
+               endif
                ; restore window
                ldx #<mainwindow
-               ldy #>mainwindow
+               ldy #>mainwindow               
                jsr prtvdu
                rts
 .printobject   stx xstore
                txa
                jsr findobject
-.prtobj        jsr copymessage
+.prtobj        lda #&0d
+               jsr copymessage
                lda #0
                sta workbuffer,x
                ldx #<workbuffer
                ldy #>workbuffer
+               if GRAPHICS=0
+                  lda #OBJCOL
+               endif
                jsr printbuf
                ldx #<objsep
                ldy #>objsep
+               lda #0
                jsr printbuf
                ldx xstore
                jmp nextobject
@@ -790,6 +878,8 @@ print "displayroom ",~displayroom
 ; stuff to add - shortcuts for commands; default commands (e.g. look)
 .performaction
 {
+               lda #0
+               sta crneeded
                lda #1
                sta continued
                ; check for movement
@@ -812,15 +902,23 @@ print "movement ",~movement
 .movement      lda #1
                sta actioned
                jmp handle_go
-.notgo         ldx #&ff
+.notgo         ldx #0
+               stx countacts
+               stx countactsh
                lda actionsptr
                sta roomptr
                lda actionsptr+1
                sta roomptr+1
-.actionsloop   inx
+.actionsloop   inc countacts
+               bne checkfin
+               inc countactsh
+.checkfin      ldx countacts
                cpx nactions
+               bne notfinished
+               ldx countactsh
+               cpx nactionsh
                beq getcheck
-               ldy #0
+.notfinished   ldy #0
                lda (roomptr),y
                iny
                cmp verb
@@ -855,7 +953,7 @@ print "movement ",~movement
                beq carryon
 .quit          lda verb
                beq carryon             ; handle auto actions - as they don't stop
-               rts                     ; as it worked, then we can skip the rest
+               bne leave               ; as it worked, then we can skip the rest
 .getcheck      ; check for gets
                ldx verb
                ldy noun
@@ -866,7 +964,11 @@ print "movement ",~movement
                jmp printsystemmsg
 .notget        cpx #18
                beq handleget
-.leave         rts
+.leave         lda crneeded
+               beq reallyleave
+               lda #&0d
+               jsr osasci
+.reallyleave   rts
 .zeroverb      ; get percentage
                lda (roomptr),y
                bne notcontinue
@@ -900,7 +1002,7 @@ print "movement ",~movement
                and #&f0
                sta xstore
                ldx #4
-               lda #1
+               lda #1                  
                sta exitnum             ; result of conditions stored here
                lda #0
                sta parptr
@@ -1142,7 +1244,6 @@ print "Condition size: ",~conditionsend-conditionsstart
                jmp responseloop
 .leave         ldx xstore
                rts 
-
 .message       stx cond
                sty parm
                jsr printmessage
@@ -1174,7 +1275,7 @@ print "Condition size: ",~conditionsend-conditionsstart
                jsr getpar
                lda currentroom
                sta objectlocs,x
-               stx redraw
+               sta redraw
                rts
 }               
 
@@ -1253,8 +1354,10 @@ print "Condition size: ",~conditionsend-conditionsstart
 {
                ldx stackptr
                txs
+               lda #&0d
+               jsr osasci
                lda #22
-               jsr printsystemmsg;
+               jsr printsystemmsg
                jsr getyesno
                bne dontrepeat
                jmp engineinit
@@ -1295,9 +1398,11 @@ print "inventory ",~inventory
 .printobject   stx locxstore
                txa
                jsr findobject
-.prtobj        jsr copymessage
+.prtobj        lda #&0d
+               jsr copymessage
                ldx #<workbuffer
                ldy #>workbuffer
+               lda #OBJCOL
                jsr printbuf
                ldx locxstore
                jmp nextobject
@@ -1400,6 +1505,8 @@ print "swapitems ",~swapitems
  
 .printcount
 {
+               lda #32
+               jsr osasci        ; insert a space
                lda currentctr
                jmp printint
 }
@@ -1468,6 +1575,7 @@ print "printnoun", ~printnoun
                sta (nounptr),y
 .printit       ldx nounptr
                ldy nounptr+1
+               lda #&20
                jmp printbuf
 }
 
@@ -1806,42 +1914,6 @@ equb swaploc1 DIV 256, selcount DIV 256, addcount DIV 256, subcount DIV 256
 equb printnoun DIV 256, printnouncr DIV 256, newline DIV 256, swaploc2 DIV 256
 equb pause DIV 256, drawpict DIV 256
 
-; System messages - we may want to transfer these to another file
-; so they're changable!
-.systemmessages
-.directionn    equb 8,"North ",0                               ; 0
-.directions    equb 8,"South ",0                               ; 1
-.directione    equb 7,"East ",0                                ; 2
-.directionw    equb 7,"West ",0                                ; 3
-.directionu    equb 5,"Up ",0                                  ; 4
-.directiond    equb 7,"Down ",0                                ; 5
-.exitslead     equb 14,"Exits lead: ",0                        ; 6
-.cansee        equb 13,"I can see: ",0                         ; 7
-.youare        equb 11,"I'm in a ",0                           ; 8
-.unknownverb   equb 23," isn't a word I know.",0               ; 9
-.cantgo        equb 22,"I can't go that way.",&0d              ; 10
-.ok            equb 6,"O.K.",&0d                               ; 11
-.whatnow       equb 23,"What shall I do now? ",0               ; 12
-.eh            equb 5,"Eh?",&0d                                ; 13
-.movedark      equb 37,"It's dangerous to move in the dark!",&0d ; 14
-.notpickedup   equb 19,"I haven't got it.",&0d                 ; 15
-.carrying      equb 16,"I'm carrying: ",&0d                    ; 16
-.cantsee       equb 22,"I can't see it here.",&0d              ; 17
-.cantdo        equb 26,"That is beyond my power.",&0d          ; 18
-.direction     equb 18,"Try a direction.",&0d                  ; 19
-.toomuch       equb 24,"I'm carrying too much!",&0d            ; 20
-.dead          equb 11,"I'm dead!",&0d                         ; 21
-.again         equb 14,"Play again? ",0                        ; 22
-.restoregame   equb 24,"Restore a saved game? ",0              ; 23
-.cantdonow     equb 27,"I can't do that just now!",&0d         ; 24
-.nothingm      equb 10,"Nothing.",&0d                          ; 25
-.unknownnoun   equb 21,"I don't understand ",0                 ; 26
-.toodark       equb 23,"It's too dark to see!",&0d             ; 27
-.lightout      equb 20,"The light ran out!",&0d                ; 28
-.breakneck     equb 26,"I fell and broke my neck",&0d          ; 29
-.lightdim      equb 27,"Your light is growing dim",&0d         ; 30 
-.filename      equb 12,"Filename? ",0                          ; 31
-
 .shortverbs    equb "NSEWUDI"
 .osfileblock
 equb <linebuffer, >linebuffer
@@ -1850,45 +1922,17 @@ equb 0,0 ,0,0
 equb 0,&c,0,0
 equb 0,&d,0,0
 
-.objsep
-equb " - ",0
 .oswordblock
 equb <linebuffer, >linebuffer
-equb &80, &20, &5a, 0
+equb &80, &20, &7b, 0
 
-.vducodes:     equb 22,129,0
-.roomwindow:   equb 28,0,20,39,14,12,0,0
-.mainwindow:   equb 28,0,31,39,20,31,0,1
-
-include "gfx.asm"
-.end
-
-save "engine",start,end
-
-; add game files - disk1
-;putfile "tgb",&1c00
-;putfile "time",&1c00
-;putfile "aod1",&1c00
-;putfile "aod2",&1c00
-;putfile "tgbgfx",graphics
-;putfile "timegfx",graphics
-;putfile "aod1gfx",graphics
-;putfile "aod2gfx",graphics
-
-; add game files - disk2
-;putfile "pulsar",&1c00
-;putfile "circus",&1c00
-;putfile "feasib",&1c00
-;putfile "akyrz",&1c00
-;putfile "p7gfx",graphics
-;putfile "cirgfx",graphics
-;putfile "feasgfx",graphics
-;putfile "akygfx",graphics
-
-; add game files - disk2
-putfile "g.perseus",&1c00
-putfile "g.10ind",&1c00
-putfile "g.waxwork",&1c00
-putfile "l.perseus",graphics
-putfile "l.10ind",graphics
-putfile "l.waxwork",graphics
+IF GRAPHICS=1
+   .vducodes:     equb 22,129,0
+   .roomwindow:   equb 28,0,21,39,13,12,0,0
+   .mainwindow:   equb 28,0,31,39,22,31,0,1
+   include "gfx.asm"
+ELSE
+   .vducodes:     equb 22,7,0
+   .roomwindow:   equb 28,0,11,39,0,12,0,0
+   .mainwindow:   equb 28,0,24,39,12,31,0,1
+ENDIF

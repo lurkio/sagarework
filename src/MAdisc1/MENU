@@ -1,0 +1,33 @@
+MODE 7
+VDU 23,1,0;0;0;0;
+PROCinit
+PROCctr("Mysterious Adventures",4)
+PROCctr("Volume 1",5)
+VDU 28,10,20,30,10
+PRINT TAB(0,0)"1. The Golden Baton"
+PRINT TAB(0,1)"2. The Time Machine"
+PRINT TAB(0,2)"3. Arrow of Death 1"
+PRINT TAB(0,3)"4. Arrow of Death 2"
+PRINT TAB(0,4)"5. Exit"
+Y%=0:G%=0:REPEATPRINTTAB(20,Y%)"<"
+G=GET:IF G=up AND Y%>0 THEN G%=G%-1
+IF G=down AND Y%<4 THEN G%=G%+1 
+PRINT TAB(20,Y%)" ";TAB(20,G%)"<"
+Y%=G%
+UNTIL G=return
+IF Y%=0 CHAIN "B.TGB"
+IF Y%=1 CHAIN "B.TIME"
+IF Y%=2 CHAIN "B.AOD1"
+IF Y%=3 CHAIN "B.AOD2"
+IF Y%=4 CALL &FFFC
+:
+DEF PROCinit
+up=139
+down=138
+return=13
+*FX 4,1
+ENDPROC
+:
+DEF PROCctr(A$,Y)
+PRINT TAB(20-LENA$/2,Y)A$
+ENDPROC

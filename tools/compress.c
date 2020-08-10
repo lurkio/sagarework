@@ -104,7 +104,7 @@ header_type *header;
       
       // Finally responses
       nresponses=0;
-      for (j=0; j < 4; j+=2)
+      for (j=0; j<2;j++)
       {
          result=fscanf(infile,"%d",&response);
          if (result != 1)
@@ -112,12 +112,24 @@ header_type *header;
             printf("Couldn't read from file properly %d %d\n", result,i);
             exit(1);
          }      
-         actions[i]->responses[j]=response / 150;
-         actions[i]->responses[j+1]=response % 150;
-         if (actions[i]->responses[j] != 0) nresponses++;
-         if (actions[i]->responses[j+1] != 0) nresponses++;
+         if ((response / 150) != 0) actions[i]->responses[nresponses++]=response / 150;
+         if ((response % 150) != 0) actions[i]->responses[nresponses++]=response % 150;
+         
       }
       actions[i]->nresponses=nresponses;
+      
+      printf("Action %d: %d %d\n", i, actions[i]->verb, actions[i]->noun);
+      printf(" Condition:");
+      for (j=0; j < lastcond; j++)
+      {
+         printf(" %d %d",actions[i]->conditions[j].condition, actions[i]->conditions[j].arg);
+      }
+      printf("\n Response:");
+      for (j=0; j < nresponses; j++)
+      {
+         printf(" %d",actions[i]->responses[j]);
+      }
+      printf("\n");
    }
 }
 
@@ -557,6 +569,7 @@ char **argv;
    
    // First read the header
    readheader(infile,header);
+   printf("%x %x %x\n",ftell(outfile), header->actions, header->actions & 0xff);
    // Actions
    readconditions(infile,actions,header);
    // Words
@@ -619,13 +632,17 @@ char **argv;
    // Munge into outheader
    bytes=0;
    fputc(header->objects, outfile);
+   printf("%x %x %x %x\n",ftell(outfile), header->actions, header->actions & 0xff, (header->actions &0xff00) >>8);
+
    fputc(header->actions & 0xff, outfile);
+   fputc((header->actions & 0xff00) >> 8,outfile);
    fputc(header->nverbs, outfile);
    fputc(header->nnouns, outfile);
    fputc(header->rooms, outfile);
    fputc(header->maxcarry, outfile);
    fputc(header->start, outfile);
-   fputc(header->wlen+((header->actions & 0xf00)>>4), outfile);
+   fputc(header->wlen, outfile);
+   printf("Wordlength: %x %x\n",header->wlen, header->actions);
    fputc(header->llen, outfile);
    fputc(header->messages, outfile);
    fputc(header->trroom, outfile);
