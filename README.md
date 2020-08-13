@@ -8,7 +8,11 @@ The code was designed to be assembled with Rich Talbot-Watkins's BeebASM (from h
 A development diary can be found at http://www.retrosoftware.co.uk/wiki/index.php?title=SAGArework
 
 The directories contain:
-samples/data - the converted data files where G.* is the graphics data and L.* is the adventure data
-samples/disks - some premade disks to run in your favourite BBC Master emulator
-src - the assembler source of the engine
-tools - the C code for taking an extract Scott Adams file and mangling it into the more compressed format I use
+* samples/data - the converted data files where G.* is the graphics data and L.* is the adventure data
+* samples/disks - some premade disks to run in your favourite BBC Master emulator
+* src - the assembler source of the engine
+* tools - the C code for taking an extract Scott Adams file and mangling it into the more compressed format I use
+
+The games are templated in src. For example, to compile Buckaroo Banzai, do the following:
+
+`beebasm -i buck.adm -do buck.ssd -opt 3`
